@@ -1,24 +1,18 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import { 
   BarChart2, TrendingUp, CheckCircle, Clock, Star, Users, 
   Search, Calendar, Filter, PieChart, Activity, ShieldCheck, Zap
 } from 'lucide-react';
-
-interface DailyTrendPoint {
-  date: string;       // e.g. 2026/11/1
-  completed: number;  // 已完成
-  pending: number;    // 未完成
-  total: number;
-}
-
-const RECENT_ANALYTICS_DATA: DailyTrendPoint[] = [
-  { date: '2026/11/1', completed: 16, pending: 42, total: 58 },
-  { date: '2026/11/2', completed: 18, pending: 40, total: 58 },
-  { date: '2026/11/3', completed: 22, pending: 15, total: 37 },
-  { date: '2026/11/4', completed: 25, pending: 18, total: 43 },
-  { date: '2026/11/5', completed: 32, pending: 12, total: 44 },
-  { date: '2026/11/6', completed: 45, pending: 8, total: 53 },
-];
+import {
+  WORK_ORDER_DAILY_TREND,
+  WORK_ORDER_TYPE_SHARE,
+  WORK_ORDER_SLA_METRICS,
+  WORK_ORDER_ENGINEER_RANKING,
+  WORK_ORDER_CATEGORY_TURNAROUND,
+  filterTrendByDateRange,
+  calcTrendSummary,
+  calcTypeShareTotal,
+} from '../../data/workOrderAnalytics';
 
 export const WorkOrderAnalyticsView: React.FC = () => {
   // Filter Toolbar States matching image_89ab42e8.png
@@ -33,6 +27,44 @@ export const WorkOrderAnalyticsView: React.FC = () => {
   // Chart Style Switcher State
   const [chartStyle, setChartStyle] = useState<'area' | 'donut' | 'radar'>('area');
   const [hoveredPointIndex, setHoveredPointIndex] = useState<number | null>(5);
+
+  // 趋势数据按时间范围过滤：搜索条件真实生效，不再只弹提示
+  const filteredTrend = useMemo(
+    () => filterTrendByDateRange(WORK_ORDER_DAILY_TREND, startDate, endDate),
+    [startDate, endDate],
+  );
+  const trendSummary = useMemo(() => calcTrendSummary(filteredTrend), [filteredTrend]);
+  const typeShareTotal = useMemo(() => calcTypeShareTotal(WORK_ORDER_TYPE_SHARE), []);
+
+  // 趋势图坐标：纵轴上限按区间最大值向上取整到 10，曲线与面积均由数据生成
+  const chartMax = Math.max(20, Math.ceil(Math.max(0, ...filteredTrend.map((pt) => pt.total)) / 10) * 10);
+  const yTicks = [chartMax, Math.round(chartMax * 0.75), Math.round(chartMax * 0.5), Math.round(chartMax * 0.25), 0];
+  const chartWidth = 600;
+  const chartHeight = 200;
+  const pointX = (idx: number) =>
+    filteredTrend.length > 1 ? (idx * chartWidth) / (filteredTrend.length - 1) : chartWidth / 2;
+  const pointY = (value: number) => chartHeight - (value / chartMax) * chartHeight;
+  const toSmoothPath = (values: number[]) => {
+    const pts = values.map((v, i) => [pointX(i), pointY(v)] as const);
+    if (pts.length === 0) return '';
+    if (pts.length === 1) return `M${pts[0][0]},${pts[0][1]}`;
+    let d = `M${pts[0][0]},${pts[0][1]}`;
+    for (let i = 0; i < pts.length - 1; i++) {
+      const [x0, y0] = pts[i];
+      const [x1, y1] = pts[i + 1];
+      const mx = (x0 + x1) / 2;
+      d += ` C${mx},${y0} ${mx},${y1} ${x1},${y1}`;
+    }
+    return d;
+  };
+  const toAreaPoints = (values: number[]) =>
+    `0,${chartHeight} ` +
+    values.map((v, i) => `${pointX(i)},${pointY(v)}`).join(' ') +
+    ` ${chartWidth},${chartHeight}`;
+  const hoveredTrend =
+    filteredTrend.length > 0 && hoveredPointIndex !== null
+      ? filteredTrend[Math.min(hoveredPointIndex, filteredTrend.length - 1)]
+      : null;
 
   const triggerDatePicker = (ref: React.RefObject<HTMLInputElement | null>) => {
     if (!ref.current) return;
@@ -50,7 +82,7 @@ export const WorkOrderAnalyticsView: React.FC = () => {
   };
 
   const handleSearch = () => {
-    alert(`已按条件更新工单统计看板：时间范围 [${startDate} ~ ${endDate}]，类型 [${orderTypeFilter}]，状态 [${statusFilter}]`);
+    alert(`已按条件更新工单统计看板：时间范围 [${startDate} ~ ${endDate}]，类型 [${orderTypeFilter}]，状态 [${statusFilter}]，区间内工单 ${trendSummary.total} 单、已结案 ${trendSummary.completed} 单、结案率 ${trendSummary.closeRate}`);
   };
 
   return (
@@ -260,97 +292,103 @@ export const WorkOrderAnalyticsView: React.FC = () => {
             </div>
 
             {/* SVG Area Chart Element */}
-            <div className="relative h-72 w-full pt-4 pb-8 font-mono">
-              {/* Y-Axis dashed grid lines */}
-              <div className="absolute inset-0 flex flex-col justify-between pointer-events-none border-l border-slate-800 pl-8">
-                {[80, 60, 40, 20, 0].map((val) => (
-                  <div key={val} className="relative w-full border-b border-slate-800/80 text-[10px] text-slate-500">
-                    <span className="absolute -left-7 -top-2 font-mono">{val}</span>
-                  </div>
-                ))}
+            {filteredTrend.length === 0 ? (
+              <div className="h-72 flex items-center justify-center text-xs text-slate-500 font-sans">
+                该时间范围内暂无工单趋势数据，请调整时间范围后重新搜索
               </div>
+            ) : (
+              <div className="relative h-72 w-full pt-4 pb-8 font-mono">
+                {/* Y-Axis dashed grid lines */}
+                <div className="absolute inset-0 flex flex-col justify-between pointer-events-none border-l border-slate-800 pl-8">
+                  {yTicks.map((val) => (
+                    <div key={val} className="relative w-full border-b border-slate-800/80 text-[10px] text-slate-500">
+                      <span className="absolute -left-7 -top-2 font-mono">{val}</span>
+                    </div>
+                  ))}
+                </div>
 
-              {/* Area SVG */}
-              <svg className="w-full h-full pl-8 overflow-visible" viewBox="0 0 600 200" preserveAspectRatio="none">
-                <defs>
-                  <linearGradient id="completedGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#22d3ee" stopOpacity="0.4" />
-                    <stop offset="100%" stopColor="#22d3ee" stopOpacity="0.0" />
-                  </linearGradient>
-                  <linearGradient id="pendingGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#fb7185" stopOpacity="0.3" />
-                    <stop offset="100%" stopColor="#fb7185" stopOpacity="0.0" />
-                  </linearGradient>
-                </defs>
+                {/* Area SVG */}
+                <svg className="w-full h-full pl-8 overflow-visible" viewBox="0 0 600 200" preserveAspectRatio="none">
+                  <defs>
+                    <linearGradient id="completedGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#22d3ee" stopOpacity="0.4" />
+                      <stop offset="100%" stopColor="#22d3ee" stopOpacity="0.0" />
+                    </linearGradient>
+                    <linearGradient id="pendingGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#fb7185" stopOpacity="0.3" />
+                      <stop offset="100%" stopColor="#fb7185" stopOpacity="0.0" />
+                    </linearGradient>
+                  </defs>
 
-                {/* Filled Area - Pending */}
-                <polygon
-                  fill="url(#pendingGrad)"
-                  points="0,200 0,95 120,100 240,162 360,155 480,170 600,180 600,200"
-                />
+                  {/* Filled Area - Pending */}
+                  <polygon
+                    fill="url(#pendingGrad)"
+                    points={toAreaPoints(filteredTrend.map((pt) => pt.pending))}
+                  />
 
-                {/* Filled Area - Completed */}
-                <polygon
-                  fill="url(#completedGrad)"
-                  points="0,200 0,160 120,155 240,145 360,137 480,120 600,87 600,200"
-                />
+                  {/* Filled Area - Completed */}
+                  <polygon
+                    fill="url(#completedGrad)"
+                    points={toAreaPoints(filteredTrend.map((pt) => pt.completed))}
+                  />
 
-                {/* Path Curve Line - Pending */}
-                <path
-                  d="M0,95 C60,98 60,100 120,100 C180,100 180,162 240,162 C300,162 300,155 360,155 C420,155 420,170 480,170 C540,170 540,180 600,180"
-                  fill="none"
-                  stroke="#fb7185"
-                  strokeWidth="3"
-                  strokeDasharray="4 2"
-                />
+                  {/* Path Curve Line - Pending */}
+                  <path
+                    d={toSmoothPath(filteredTrend.map((pt) => pt.pending))}
+                    fill="none"
+                    stroke="#fb7185"
+                    strokeWidth="3"
+                    strokeDasharray="4 2"
+                  />
 
-                {/* Path Curve Line - Completed */}
-                <path
-                  d="M0,160 C60,158 60,155 120,155 C180,155 180,145 240,145 C300,145 300,137 360,137 C420,137 420,120 480,120 C540,120 540,87 600,87"
-                  fill="none"
-                  stroke="#22d3ee"
-                  strokeWidth="3.5"
-                />
+                  {/* Path Curve Line - Completed */}
+                  <path
+                    d={toSmoothPath(filteredTrend.map((pt) => pt.completed))}
+                    fill="none"
+                    stroke="#22d3ee"
+                    strokeWidth="3.5"
+                  />
 
-                {/* Interactive Points */}
-                {RECENT_ANALYTICS_DATA.map((pt, idx) => {
-                  const x = idx * 120;
-                  const compY = 200 - (pt.completed / 80) * 200;
-                  const pendY = 200 - (pt.pending / 80) * 200;
-                  const isHovered = hoveredPointIndex === idx;
+                  {/* Interactive Points */}
+                  {filteredTrend.map((pt, idx) => {
+                    const x = pointX(idx);
+                    const compY = pointY(pt.completed);
+                    const pendY = pointY(pt.pending);
+                    const isHovered = hoveredPointIndex === idx;
 
-                  return (
-                    <g key={pt.date} onMouseEnter={() => setHoveredPointIndex(idx)} className="cursor-pointer">
-                      {/* Vertical Hover Line */}
-                      {isHovered && (
-                        <line x1={x} y1="0" x2={x} y2="200" stroke="#0ea5e9" strokeWidth="1" strokeDasharray="2 2" />
-                      )}
+                    return (
+                      <g key={pt.date} onMouseEnter={() => setHoveredPointIndex(idx)} className="cursor-pointer">
+                        {/* Vertical Hover Line */}
+                        {isHovered && (
+                          <line x1={x} y1="0" x2={x} y2="200" stroke="#0ea5e9" strokeWidth="1" strokeDasharray="2 2" />
+                        )}
 
-                      {/* Pending point dot */}
-                      <circle cx={x} cy={pendY} r={isHovered ? "6" : "4"} fill="#fb7185" className="transition-all" />
+                        {/* Pending point dot */}
+                        <circle cx={x} cy={pendY} r={isHovered ? "6" : "4"} fill="#fb7185" className="transition-all" />
 
-                      {/* Completed point dot */}
-                      <circle cx={x} cy={compY} r={isHovered ? "7" : "5"} fill="#22d3ee" stroke="#0284c7" strokeWidth="2" className="transition-all" />
-                    </g>
-                  );
-                })}
-              </svg>
+                        {/* Completed point dot */}
+                        <circle cx={x} cy={compY} r={isHovered ? "7" : "5"} fill="#22d3ee" stroke="#0284c7" strokeWidth="2" className="transition-all" />
+                      </g>
+                    );
+                  })}
+                </svg>
 
-              {/* X-Axis Labels */}
-              <div className="flex justify-between pl-8 pt-3 text-[11px] text-slate-400 font-mono">
-                {RECENT_ANALYTICS_DATA.map((pt) => (
-                  <span key={pt.date}>{pt.date}</span>
-                ))}
+                {/* X-Axis Labels */}
+                <div className="flex justify-between pl-8 pt-3 text-[11px] text-slate-400 font-mono">
+                  {filteredTrend.map((pt) => (
+                    <span key={pt.date}>{pt.date}</span>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Hover Data Detail Card */}
-            {hoveredPointIndex !== null && (
+            {hoveredTrend !== null && (
               <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between text-xs font-mono animate-in fade-in">
                 <div className="flex items-center gap-3">
                   <Calendar className="w-4 h-4 text-cyan-400" />
                   <span className="font-bold text-slate-200">
-                    日期节点: {RECENT_ANALYTICS_DATA[hoveredPointIndex].date}
+                    日期节点: {hoveredTrend.date}
                   </span>
                 </div>
 
@@ -358,19 +396,19 @@ export const WorkOrderAnalyticsView: React.FC = () => {
                   <div>
                     <span className="text-slate-500 text-[11px] block">已完成结案:</span>
                     <span className="text-cyan-400 font-bold font-mono text-sm">
-                      {RECENT_ANALYTICS_DATA[hoveredPointIndex].completed} 单
+                      {hoveredTrend.completed} 单
                     </span>
                   </div>
                   <div>
                     <span className="text-slate-500 text-[11px] block">待处理/未完成:</span>
                     <span className="text-rose-400 font-bold font-mono text-sm">
-                      {RECENT_ANALYTICS_DATA[hoveredPointIndex].pending} 单
+                      {hoveredTrend.pending} 单
                     </span>
                   </div>
                   <div>
                     <span className="text-slate-500 text-[11px] block">当日工单总量:</span>
                     <span className="text-slate-200 font-bold font-mono text-sm">
-                      {RECENT_ANALYTICS_DATA[hoveredPointIndex].total} 单
+                      {hoveredTrend.total} 单
                     </span>
                   </div>
                 </div>
@@ -386,27 +424,22 @@ export const WorkOrderAnalyticsView: React.FC = () => {
             <div className="flex items-center justify-center relative">
               <div className="w-56 h-56 rounded-full border-8 border-cyan-500/80 border-t-emerald-400 border-r-indigo-500 border-b-rose-500 flex flex-col items-center justify-center shadow-xl shadow-cyan-950/20">
                 <span className="text-slate-400 text-xs">全月工单总计</span>
-                <span className="text-3xl font-black text-slate-100 font-mono mt-1">287</span>
+                <span className="text-3xl font-black text-slate-100 font-mono mt-1">{typeShareTotal}</span>
                 <span className="text-[11px] text-emerald-400 font-mono mt-0.5">SLA 达标率 99.4%</span>
               </div>
             </div>
 
             {/* Distribution Legend */}
             <div className="space-y-3 font-mono">
-              {[
-                { label: '硬件故障报修 (天线/板卡/硬盘换热)', pct: '35%', count: '101 单', color: 'bg-cyan-400' },
-                { label: '软件升级与补丁缝补 (灰度滚动发布)', pct: '28%', count: '80 单', color: 'bg-emerald-400' },
-                { label: '数据库与缓存调优 (Binlog/BigKey)', pct: '22%', count: '63 单', color: 'bg-indigo-400' },
-                { label: '网络与安全策略调整 (防火墙/SFP+)', pct: '15%', count: '43 单', color: 'bg-rose-400' },
-              ].map((item, idx) => (
-                <div key={idx} className="p-3 rounded-lg bg-slate-950 border border-slate-800 flex items-center justify-between">
+              {WORK_ORDER_TYPE_SHARE.map((item) => (
+                <div key={item.label} className="p-3 rounded-lg bg-slate-950 border border-slate-800 flex items-center justify-between">
                   <div className="flex items-center gap-2.5">
                     <span className={`w-3 h-3 rounded-full ${item.color}`} />
                     <span className="text-slate-200 font-sans text-xs">{item.label}</span>
                   </div>
                   <div className="flex items-center gap-3 font-mono">
-                    <span className="text-cyan-300 font-bold">{item.pct}</span>
-                    <span className="text-slate-500 text-[11px]">({item.count})</span>
+                    <span className="text-cyan-300 font-bold">{Math.round((item.count / typeShareTotal) * 100)}%</span>
+                    <span className="text-slate-500 text-[11px]">({item.count} 单)</span>
                   </div>
                 </div>
               ))}
@@ -433,13 +466,8 @@ export const WorkOrderAnalyticsView: React.FC = () => {
 
             {/* Radar Metrics Table */}
             <div className="space-y-3 font-mono">
-              {[
-                { metric: '平均首响响应耗时 (FRT)', target: '≤ 10分钟', actual: '6.2 分钟', status: '优异' },
-                { metric: '平均故障解决时长 (MTTR)', target: '≤ 4.0小时', actual: '1.8 小时', status: '优异' },
-                { metric: '工单一次性解决闭环率', target: '≥ 95.0%', actual: '98.5%', status: '达标' },
-                { metric: '业务满意度星级评分', target: '≥ 4.80', actual: '4.95 / 5.0', status: '优异' },
-              ].map((m, idx) => (
-                <div key={idx} className="p-3 rounded-lg bg-slate-950 border border-slate-800 flex items-center justify-between text-xs">
+              {WORK_ORDER_SLA_METRICS.map((m) => (
+                <div key={m.metric} className="p-3 rounded-lg bg-slate-950 border border-slate-800 flex items-center justify-between text-xs">
                   <div>
                     <div className="text-slate-200 font-sans font-bold">{m.metric}</div>
                     <div className="text-[11px] text-slate-500">承诺指标: {m.target}</div>
@@ -467,12 +495,7 @@ export const WorkOrderAnalyticsView: React.FC = () => {
           </h3>
 
           <div className="space-y-3">
-            {[
-              { name: '张帆', role: '全息基础设施架构组', closed: 48, avgTime: '1.2h', rating: 4.98 },
-              { name: '赵振华', role: 'DBA 数据库专家组', closed: 36, avgTime: '1.5h', rating: 4.95 },
-              { name: '严亮', role: '中间件与高速缓存组', closed: 29, avgTime: '0.8h', rating: 4.92 },
-              { name: '刘芳', role: '网络与安全保障组', closed: 22, avgTime: '2.1h', rating: 4.90 },
-            ].map((eng, idx) => (
+            {WORK_ORDER_ENGINEER_RANKING.map((eng, idx) => (
               <div
                 key={eng.name}
                 className="p-3 rounded-lg bg-slate-950 border border-slate-800 flex items-center justify-between text-xs"
@@ -505,14 +528,8 @@ export const WorkOrderAnalyticsView: React.FC = () => {
           </h3>
 
           <div className="space-y-3">
-            {[
-              { label: '硬件故障报修 (现场检修/更换原厂部件)', time: '1.8 小时', pct: 60, color: 'bg-rose-500' },
-              { label: '资源扩容审批 (Flink / YARN 队列调配)', time: '0.6 小时', pct: 25, color: 'bg-cyan-500' },
-              { label: '组件版本升级 (灰度平滑滚动发布)', time: '3.4 小时', pct: 90, color: 'bg-indigo-500' },
-              { label: '安全权限申请 (堡垒机 / BMC 临时提权)', time: '0.3 小时', pct: 15, color: 'bg-emerald-500' },
-              { label: '性能调优工单 (Binlog 复制/BigKey 拆解)', time: '2.2 小时', pct: 70, color: 'bg-amber-500' },
-            ].map((cat, idx) => (
-              <div key={idx} className="space-y-1 text-xs">
+            {WORK_ORDER_CATEGORY_TURNAROUND.map((cat) => (
+              <div key={cat.label} className="space-y-1 text-xs">
                 <div className="flex justify-between font-mono">
                   <span className="text-slate-300 font-medium font-sans">{cat.label}</span>
                   <span className="text-slate-400">{cat.time}</span>

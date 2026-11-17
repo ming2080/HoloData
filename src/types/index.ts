@@ -488,3 +488,38 @@ export interface TelemetryAgent {
   memMB: number;
   lastHeartbeat: string;
 }
+
+export interface WorkOrderDailyTrend {
+  date: string; // 如 2026/11/1
+  completed: number; // 已完成
+  pending: number; // 未完成
+  total: number;
+}
+
+export interface WorkOrderTypeShare {
+  label: string;
+  count: number;
+  color: string;
+}
+
+export interface SlaMetric {
+  metric: string;
+  target: string;
+  actual: string;
+  status: '优异' | '达标' | '待改进';
+}
+
+export interface EngineerPerformance {
+  name: string;
+  role: string;
+  closed: number;
+  avgTime: string;
+  rating: number;
+}
+
+export interface CategoryTurnaround {
+  label: string;
+  time: string;
+  pct: number;
+  color: string;
+}
