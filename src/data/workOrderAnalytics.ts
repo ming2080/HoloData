@@ -8,12 +8,45 @@ import type {
 
 /** 工单统计看板：每日完成 / 待办趋势（与工单实际流转口径一致） */
 export const WORK_ORDER_DAILY_TREND: WorkOrderDailyTrend[] = [
+  { date: '2026/10/10', completed: 12, pending: 38, total: 50 },
+  { date: '2026/10/11', completed: 14, pending: 35, total: 49 },
+  { date: '2026/10/12', completed: 15, pending: 33, total: 48 },
+  { date: '2026/10/13', completed: 17, pending: 30, total: 47 },
+  { date: '2026/10/14', completed: 19, pending: 28, total: 47 },
+  { date: '2026/10/15', completed: 21, pending: 25, total: 46 },
+  { date: '2026/10/16', completed: 20, pending: 27, total: 47 },
+  { date: '2026/10/17', completed: 23, pending: 22, total: 45 },
+  { date: '2026/10/18', completed: 24, pending: 21, total: 45 },
+  { date: '2026/10/19', completed: 26, pending: 19, total: 45 },
+  { date: '2026/10/20', completed: 28, pending: 17, total: 45 },
+  { date: '2026/10/21', completed: 27, pending: 18, total: 45 },
+  { date: '2026/10/22', completed: 30, pending: 15, total: 45 },
+  { date: '2026/10/23', completed: 31, pending: 14, total: 45 },
+  { date: '2026/10/24', completed: 29, pending: 16, total: 45 },
+  { date: '2026/10/25', completed: 33, pending: 12, total: 45 },
+  { date: '2026/10/26', completed: 35, pending: 11, total: 46 },
+  { date: '2026/10/27', completed: 34, pending: 13, total: 47 },
+  { date: '2026/10/28', completed: 36, pending: 10, total: 46 },
+  { date: '2026/10/29', completed: 38, pending: 9, total: 47 },
+  { date: '2026/10/30', completed: 37, pending: 11, total: 48 },
+  { date: '2026/10/31', completed: 40, pending: 8, total: 48 },
   { date: '2026/11/1', completed: 16, pending: 42, total: 58 },
   { date: '2026/11/2', completed: 18, pending: 40, total: 58 },
   { date: '2026/11/3', completed: 22, pending: 15, total: 37 },
   { date: '2026/11/4', completed: 25, pending: 18, total: 43 },
   { date: '2026/11/5', completed: 32, pending: 12, total: 44 },
   { date: '2026/11/6', completed: 45, pending: 8, total: 53 },
+  { date: '2026/11/7', completed: 41, pending: 10, total: 51 },
+  { date: '2026/11/8', completed: 38, pending: 12, total: 50 },
+  { date: '2026/11/9', completed: 44, pending: 9, total: 53 },
+  { date: '2026/11/10', completed: 46, pending: 8, total: 54 },
+  { date: '2026/11/11', completed: 43, pending: 11, total: 54 },
+  { date: '2026/11/12', completed: 47, pending: 7, total: 54 },
+  { date: '2026/11/13', completed: 49, pending: 6, total: 55 },
+  { date: '2026/11/14', completed: 45, pending: 9, total: 54 },
+  { date: '2026/11/15', completed: 48, pending: 7, total: 55 },
+  { date: '2026/11/16', completed: 50, pending: 6, total: 56 },
+  { date: '2026/11/17', completed: 52, pending: 5, total: 57 },
 ];
 
 /** 工单类型分布：数量为源数据，占比由数量实时计算，避免手写百分比与数量对不上 */
@@ -61,6 +94,38 @@ export function filterTrendByDateRange(
     const t = new Date(pt.date).getTime();
     return t >= start && t <= end;
   });
+}
+
+/** 状态筛选真实生效：已完成只留已完成曲线，待办类状态只留未完成曲线 */
+export function filterTrendByStatus(
+  trend: WorkOrderDailyTrend[],
+  statusFilter: 'all' | '待分析' | '待审批' | '待实施' | '待验证' | '已完成',
+): WorkOrderDailyTrend[] {
+  if (statusFilter === 'all') return trend;
+  if (statusFilter === '已完成') {
+    return trend.map((pt) => ({ ...pt, pending: 0, total: pt.completed }));
+  }
+  return trend.map((pt) => ({ ...pt, completed: 0, total: pt.pending }));
+}
+
+/** 搜索栏工单类型下拉值 → 类型分布标签的匹配关键词 */
+export const WORK_ORDER_TYPE_KEYWORDS: Record<string, string> = {
+  '硬件故障报修': '硬件故障',
+  '紧急变更单': '紧急变更',
+  '软件升级单': '软件升级',
+  '数据库调优单': '数据库',
+  '网络安全单': '网络',
+};
+
+/** 类型筛选真实生效：只保留标签命中关键词的类型分布，无命中则返回空列表 */
+export function filterTypeShareByOrderType(
+  share: WorkOrderTypeShare[],
+  orderType: string,
+): WorkOrderTypeShare[] {
+  if (orderType === 'all') return share;
+  const keyword = WORK_ORDER_TYPE_KEYWORDS[orderType];
+  if (!keyword) return [];
+  return share.filter((item) => item.label.includes(keyword));
 }
 
 /** 趋势汇总：区间总量、已完成量与结案率，供看板头部与悬停卡片复用 */

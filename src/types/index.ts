@@ -489,6 +489,22 @@ export interface TelemetryAgent {
   lastHeartbeat: string;
 }
 
+export type WorkOrderAnalyticsStatusFilter =
+  | 'all'
+  | '待分析'
+  | '待审批'
+  | '待实施'
+  | '待验证'
+  | '已完成';
+
+export type WorkOrderAnalyticsTypeFilter =
+  | 'all'
+  | '硬件故障报修'
+  | '紧急变更单'
+  | '软件升级单'
+  | '数据库调优单'
+  | '网络安全单';
+
 export interface WorkOrderDailyTrend {
   date: string; // 如 2026/11/1
   completed: number; // 已完成

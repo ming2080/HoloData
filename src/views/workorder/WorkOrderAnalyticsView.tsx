@@ -3,6 +3,10 @@ import {
   BarChart2, TrendingUp, CheckCircle, Clock, Star, Users, 
   Search, Calendar, Filter, PieChart, Activity, ShieldCheck, Zap
 } from 'lucide-react';
+import type {
+  WorkOrderAnalyticsStatusFilter,
+  WorkOrderAnalyticsTypeFilter,
+} from '../../types';
 import {
   WORK_ORDER_DAILY_TREND,
   WORK_ORDER_TYPE_SHARE,
@@ -10,14 +14,16 @@ import {
   WORK_ORDER_ENGINEER_RANKING,
   WORK_ORDER_CATEGORY_TURNAROUND,
   filterTrendByDateRange,
+  filterTrendByStatus,
+  filterTypeShareByOrderType,
   calcTrendSummary,
   calcTypeShareTotal,
 } from '../../data/workOrderAnalytics';
 
 export const WorkOrderAnalyticsView: React.FC = () => {
   // Filter Toolbar States matching image_89ab42e8.png
-  const [orderTypeFilter, setOrderTypeFilter] = useState('all');
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [orderTypeFilter, setOrderTypeFilter] = useState<WorkOrderAnalyticsTypeFilter>('all');
+  const [statusFilter, setStatusFilter] = useState<WorkOrderAnalyticsStatusFilter>('all');
   const [startDate, setStartDate] = useState('2026-11-01');
   const [endDate, setEndDate] = useState('2026-11-09');
 
@@ -28,13 +34,25 @@ export const WorkOrderAnalyticsView: React.FC = () => {
   const [chartStyle, setChartStyle] = useState<'area' | 'donut' | 'radar'>('area');
   const [hoveredPointIndex, setHoveredPointIndex] = useState<number | null>(5);
 
-  // 趋势数据按时间范围过滤：搜索条件真实生效，不再只弹提示
+  // 趋势数据按时间范围与状态过滤：搜索条件真实生效，不再只弹提示
   const filteredTrend = useMemo(
-    () => filterTrendByDateRange(WORK_ORDER_DAILY_TREND, startDate, endDate),
-    [startDate, endDate],
+    () =>
+      filterTrendByStatus(
+        filterTrendByDateRange(WORK_ORDER_DAILY_TREND, startDate, endDate),
+        statusFilter,
+      ),
+    [startDate, endDate, statusFilter],
   );
   const trendSummary = useMemo(() => calcTrendSummary(filteredTrend), [filteredTrend]);
-  const typeShareTotal = useMemo(() => calcTypeShareTotal(WORK_ORDER_TYPE_SHARE), []);
+  // 类型分布按工单类型筛选：环形图中心总数与占比随筛选实时变化
+  const filteredTypeShare = useMemo(
+    () => filterTypeShareByOrderType(WORK_ORDER_TYPE_SHARE, orderTypeFilter),
+    [orderTypeFilter],
+  );
+  const typeShareTotal = useMemo(() => calcTypeShareTotal(filteredTypeShare), [filteredTypeShare]);
+  // 状态筛选只显示对应的曲线：已完成只看已完成，未完成类状态只看未完成
+  const showCompletedCurve = statusFilter === 'all' || statusFilter === '已完成';
+  const showPendingCurve = statusFilter === 'all' || statusFilter !== '已完成';
 
   // 趋势图坐标：纵轴上限按区间最大值向上取整到 10，曲线与面积均由数据生成
   const chartMax = Math.max(20, Math.ceil(Math.max(0, ...filteredTrend.map((pt) => pt.total)) / 10) * 10);
@@ -82,7 +100,9 @@ export const WorkOrderAnalyticsView: React.FC = () => {
   };
 
   const handleSearch = () => {
-    alert(`已按条件更新工单统计看板：时间范围 [${startDate} ~ ${endDate}]，类型 [${orderTypeFilter}]，状态 [${statusFilter}]，区间内工单 ${trendSummary.total} 单、已结案 ${trendSummary.completed} 单、结案率 ${trendSummary.closeRate}`);
+    const typeText = orderTypeFilter === 'all' ? '全部类型' : orderTypeFilter;
+    const statusText = statusFilter === 'all' ? '全部状态' : statusFilter;
+    alert(`已按条件更新工单统计看板：时间范围 [${startDate} ~ ${endDate}]，类型 [${typeText}]，状态 [${statusText}]，区间内工单 ${trendSummary.total} 单、已结案 ${trendSummary.completed} 单、结案率 ${trendSummary.closeRate}，类型分布共 ${typeShareTotal} 单`);
   };
 
   return (
@@ -142,7 +162,7 @@ export const WorkOrderAnalyticsView: React.FC = () => {
         {/* Dropdown 1: 全部工单类型 */}
         <select
           value={orderTypeFilter}
-          onChange={(e) => setOrderTypeFilter(e.target.value)}
+          onChange={(e) => setOrderTypeFilter(e.target.value as WorkOrderAnalyticsTypeFilter)}
           className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-cyan-500 font-sans cursor-pointer"
         >
           <option value="all">全部工单类型</option>
@@ -156,7 +176,7 @@ export const WorkOrderAnalyticsView: React.FC = () => {
         {/* Dropdown 2: 全部状态 */}
         <select
           value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
+          onChange={(e) => setStatusFilter(e.target.value as WorkOrderAnalyticsStatusFilter)}
           className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-cyan-500 font-sans cursor-pointer"
         >
           <option value="all">全部状态</option>
@@ -272,14 +292,18 @@ export const WorkOrderAnalyticsView: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-6 text-xs font-mono">
-            <div className="flex items-center gap-2">
-              <span className="w-3 h-3 rounded-full bg-cyan-400 ring-2 ring-cyan-500/20" />
-              <span className="text-slate-300 font-sans">已完成工单</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="w-3 h-3 rounded-full bg-rose-400 ring-2 ring-rose-500/20" />
-              <span className="text-slate-300 font-sans">未完成/处置中</span>
-            </div>
+            {showCompletedCurve && (
+              <div className="flex items-center gap-2">
+                <span className="w-3 h-3 rounded-full bg-cyan-400 ring-2 ring-cyan-500/20" />
+                <span className="text-slate-300 font-sans">已完成工单</span>
+              </div>
+            )}
+            {showPendingCurve && (
+              <div className="flex items-center gap-2">
+                <span className="w-3 h-3 rounded-full bg-rose-400 ring-2 ring-rose-500/20" />
+                <span className="text-slate-300 font-sans">未完成/处置中</span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -321,33 +345,41 @@ export const WorkOrderAnalyticsView: React.FC = () => {
                   </defs>
 
                   {/* Filled Area - Pending */}
-                  <polygon
-                    fill="url(#pendingGrad)"
-                    points={toAreaPoints(filteredTrend.map((pt) => pt.pending))}
-                  />
+                  {showPendingCurve && (
+                    <polygon
+                      fill="url(#pendingGrad)"
+                      points={toAreaPoints(filteredTrend.map((pt) => pt.pending))}
+                    />
+                  )}
 
                   {/* Filled Area - Completed */}
-                  <polygon
-                    fill="url(#completedGrad)"
-                    points={toAreaPoints(filteredTrend.map((pt) => pt.completed))}
-                  />
+                  {showCompletedCurve && (
+                    <polygon
+                      fill="url(#completedGrad)"
+                      points={toAreaPoints(filteredTrend.map((pt) => pt.completed))}
+                    />
+                  )}
 
                   {/* Path Curve Line - Pending */}
-                  <path
-                    d={toSmoothPath(filteredTrend.map((pt) => pt.pending))}
-                    fill="none"
-                    stroke="#fb7185"
-                    strokeWidth="3"
-                    strokeDasharray="4 2"
-                  />
+                  {showPendingCurve && (
+                    <path
+                      d={toSmoothPath(filteredTrend.map((pt) => pt.pending))}
+                      fill="none"
+                      stroke="#fb7185"
+                      strokeWidth="3"
+                      strokeDasharray="4 2"
+                    />
+                  )}
 
                   {/* Path Curve Line - Completed */}
-                  <path
-                    d={toSmoothPath(filteredTrend.map((pt) => pt.completed))}
-                    fill="none"
-                    stroke="#22d3ee"
-                    strokeWidth="3.5"
-                  />
+                  {showCompletedCurve && (
+                    <path
+                      d={toSmoothPath(filteredTrend.map((pt) => pt.completed))}
+                      fill="none"
+                      stroke="#22d3ee"
+                      strokeWidth="3.5"
+                    />
+                  )}
 
                   {/* Interactive Points */}
                   {filteredTrend.map((pt, idx) => {
@@ -364,10 +396,14 @@ export const WorkOrderAnalyticsView: React.FC = () => {
                         )}
 
                         {/* Pending point dot */}
-                        <circle cx={x} cy={pendY} r={isHovered ? "6" : "4"} fill="#fb7185" className="transition-all" />
+                        {showPendingCurve && (
+                          <circle cx={x} cy={pendY} r={isHovered ? "6" : "4"} fill="#fb7185" className="transition-all" />
+                        )}
 
                         {/* Completed point dot */}
-                        <circle cx={x} cy={compY} r={isHovered ? "7" : "5"} fill="#22d3ee" stroke="#0284c7" strokeWidth="2" className="transition-all" />
+                        {showCompletedCurve && (
+                          <circle cx={x} cy={compY} r={isHovered ? "7" : "5"} fill="#22d3ee" stroke="#0284c7" strokeWidth="2" className="transition-all" />
+                        )}
                       </g>
                     );
                   })}
@@ -393,18 +429,22 @@ export const WorkOrderAnalyticsView: React.FC = () => {
                 </div>
 
                 <div className="flex items-center gap-6 font-sans">
-                  <div>
-                    <span className="text-slate-500 text-[11px] block">已完成结案:</span>
-                    <span className="text-cyan-400 font-bold font-mono text-sm">
-                      {hoveredTrend.completed} 单
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-slate-500 text-[11px] block">待处理/未完成:</span>
-                    <span className="text-rose-400 font-bold font-mono text-sm">
-                      {hoveredTrend.pending} 单
-                    </span>
-                  </div>
+                  {showCompletedCurve && (
+                    <div>
+                      <span className="text-slate-500 text-[11px] block">已完成结案:</span>
+                      <span className="text-cyan-400 font-bold font-mono text-sm">
+                        {hoveredTrend.completed} 单
+                      </span>
+                    </div>
+                  )}
+                  {showPendingCurve && (
+                    <div>
+                      <span className="text-slate-500 text-[11px] block">待处理/未完成:</span>
+                      <span className="text-rose-400 font-bold font-mono text-sm">
+                        {hoveredTrend.pending} 单
+                      </span>
+                    </div>
+                  )}
                   <div>
                     <span className="text-slate-500 text-[11px] block">当日工单总量:</span>
                     <span className="text-slate-200 font-bold font-mono text-sm">
@@ -431,18 +471,24 @@ export const WorkOrderAnalyticsView: React.FC = () => {
 
             {/* Distribution Legend */}
             <div className="space-y-3 font-mono">
-              {WORK_ORDER_TYPE_SHARE.map((item) => (
-                <div key={item.label} className="p-3 rounded-lg bg-slate-950 border border-slate-800 flex items-center justify-between">
-                  <div className="flex items-center gap-2.5">
-                    <span className={`w-3 h-3 rounded-full ${item.color}`} />
-                    <span className="text-slate-200 font-sans text-xs">{item.label}</span>
-                  </div>
-                  <div className="flex items-center gap-3 font-mono">
-                    <span className="text-cyan-300 font-bold">{Math.round((item.count / typeShareTotal) * 100)}%</span>
-                    <span className="text-slate-500 text-[11px]">({item.count} 单)</span>
-                  </div>
+              {filteredTypeShare.length === 0 ? (
+                <div className="p-3 rounded-lg bg-slate-950 border border-slate-800 text-xs text-slate-500 font-sans">
+                  该工单类型暂无分布数据，请更换类型后重新查看
                 </div>
-              ))}
+              ) : (
+                filteredTypeShare.map((item) => (
+                  <div key={item.label} className="p-3 rounded-lg bg-slate-950 border border-slate-800 flex items-center justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <span className={`w-3 h-3 rounded-full ${item.color}`} />
+                      <span className="text-slate-200 font-sans text-xs">{item.label}</span>
+                    </div>
+                    <div className="flex items-center gap-3 font-mono">
+                      <span className="text-cyan-300 font-bold">{Math.round((item.count / typeShareTotal) * 100)}%</span>
+                      <span className="text-slate-500 text-[11px]">({item.count} 单)</span>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         )}
