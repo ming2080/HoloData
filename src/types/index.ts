@@ -539,3 +539,28 @@ export interface CategoryTurnaround {
   pct: number;
   color: string;
 }
+
+/** 历史告警趋势：时间范围（默认近 30 天，与原静态展示口径一致） */
+export type AlarmHistoryRange = '7d' | '30d' | '90d';
+
+export interface AlarmRootCauseStat {
+  label: string;
+  count: number; // 事件次数（源数据），占比由次数实时计算
+  color: string;
+}
+
+export interface AlarmSlaSummary {
+  mttaMinutes: number; // 平均告警响应时间（分钟）
+  mttaTargetMinutes: number; // MTTA 目标（分钟）
+  mttaSlaRate: number; // MTTA SLA 达标率（%）
+  mttrMinutes: number; // 平均故障恢复时间（分钟）
+  mttrImprovementPct: number; // MTTR 较上月提速（%）
+  convergencePct: number; // 告警智能收敛抑制比（%）
+  closurePct: number; // 年度告警闭环率（%）
+}
+
+export interface AlarmMonthlyTrend {
+  month: string; // 如 2026/06
+  mttaMinutes: number;
+  mttrMinutes: number;
+}
