@@ -232,6 +232,17 @@ export const EventReviewView: React.FC = () => {
     }
   };
 
+  // 复盘 KPI 由事件列表计算：SLA 达标 = 已完成复盘（非待追责）占比，
+  // 复发率 = 发生次数大于 1 的事件占比
+  const slaRate =
+    eventsList.length > 0
+      ? (eventsList.filter((e) => e.status !== '待追责').length / eventsList.length) * 100
+      : 0;
+  const recurrenceRate =
+    eventsList.length > 0
+      ? (eventsList.filter((e) => e.count > 1).length / eventsList.length) * 100
+      : 0;
+
   return (
     <div className="space-y-6">
       {/* Top Redesigned DataOps Retrospective Summary KPI Cards */}
@@ -264,7 +275,7 @@ export const EventReviewView: React.FC = () => {
           <div>
             <span className="text-slate-400 font-sans text-xs block">根因分析 SLA 达标率</span>
             <div className="text-2xl font-black text-purple-300 mt-1">
-              96.2%
+              {slaRate.toFixed(1)}%
             </div>
           </div>
           <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400">
@@ -275,8 +286,8 @@ export const EventReviewView: React.FC = () => {
         <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800 flex items-center justify-between shadow-xs">
           <div>
             <span className="text-slate-400 font-sans text-xs block">同类故障再次复发率</span>
-            <div className="text-2xl font-black text-emerald-400 mt-1">
-              0.00%
+            <div className={`text-2xl font-black mt-1 ${recurrenceRate >= 20 ? 'text-amber-400' : 'text-emerald-400'}`}>
+              {recurrenceRate.toFixed(2)}%
             </div>
           </div>
           <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
