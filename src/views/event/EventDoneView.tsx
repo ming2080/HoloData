@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
-import { 
-  CheckCircle2, Search, Filter, ShieldCheck, Clock, Eye, 
+import React, { useMemo, useState } from 'react';
+import {
+  CheckCircle2, Search, Filter, ShieldCheck, Clock, Eye,
   Award, RefreshCw, X, ChevronLeft, ChevronRight, FileCheck
 } from 'lucide-react';
+import { calcDoneKpis } from '../../data/eventDone';
 
 export interface EventDoneItem {
   id: string;              // e.g. EVT-2026-102901
@@ -250,6 +251,9 @@ export const EventDoneView: React.FC = () => {
     currentPage * pageSize
   );
 
+  // 顶部 KPI 由筛选后的已办事件列表实时计算（见 src/data/eventDone.ts 口径说明）
+  const doneKpis = useMemo(() => calcDoneKpis(filteredEvents), [filteredEvents]);
+
   const handlePageChange = (newPage: number) => {
     const validPage = Math.max(1, Math.min(newPage, totalPages));
     setCurrentPage(validPage);
@@ -292,7 +296,7 @@ export const EventDoneView: React.FC = () => {
           <div>
             <span className="text-slate-400 font-sans text-xs block">已结案闭环事件</span>
             <div className="text-2xl font-black text-emerald-400 mt-1">
-              {eventsList.length} <span className="text-xs font-normal text-slate-400">件</span>
+              {doneKpis.total} <span className="text-xs font-normal text-slate-400">件</span>
             </div>
           </div>
           <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
@@ -304,7 +308,7 @@ export const EventDoneView: React.FC = () => {
           <div>
             <span className="text-slate-400 font-sans text-xs block">自动消警规则降噪率</span>
             <div className="text-2xl font-black text-purple-300 mt-1">
-              33.3%
+              {doneKpis.autoCloseRate.toFixed(1)}%
             </div>
           </div>
           <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400">
@@ -316,7 +320,7 @@ export const EventDoneView: React.FC = () => {
           <div>
             <span className="text-slate-400 font-sans text-xs block">平均修复时长 (MTTR)</span>
             <div className="text-2xl font-black text-cyan-300 mt-1">
-              21.8 <span className="text-xs font-normal text-slate-400">分钟</span>
+              {doneKpis.avgMttrMinutes.toFixed(1)} <span className="text-xs font-normal text-slate-400">分钟</span>
             </div>
           </div>
           <div className="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400">
@@ -328,7 +332,7 @@ export const EventDoneView: React.FC = () => {
           <div>
             <span className="text-slate-400 font-sans text-xs block">事件闭环达成率</span>
             <div className="text-2xl font-black text-amber-400 mt-1">
-              100.0%
+              {doneKpis.closedRate.toFixed(1)}%
             </div>
           </div>
           <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
