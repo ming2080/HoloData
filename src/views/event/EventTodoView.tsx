@@ -4,6 +4,8 @@ import {
   ArrowRightLeft, FileText, XCircle, Eye, Wrench, X, Clock, ChevronLeft, ChevronRight, UserPlus
 } from 'lucide-react';
 
+import { calcTodoKpis } from '../../data/eventTodo';
+
 export interface EventTodoItem {
   id: string;              // e.g. EVT-2026-2910211
   title: string;           // 标题: e.g. 天津港RFID天线阵列阻抗衰减告警
@@ -16,6 +18,7 @@ export interface EventTodoItem {
   assignee: string;        // 负责人
   handler: string;         // 处理人 ("-" 或 名字)
   count: number;           // 发生次数
+  respondMinutes: number;    // 响应处置时长（分钟）: 从接警到首次响应的分钟数
   description?: string;
 }
 
@@ -32,6 +35,7 @@ const INITIAL_TODO_EVENTS: EventTodoItem[] = [
     assignee: '张建国',
     handler: '—',
     count: 1,
+    respondMinutes: 1.8,
     description: '读写天线4号通道驻波比(VSWR)达到 2.15，超出正常工作区间 [1.0, 1.5]，导致RFID标签感应识别距离衰减约40%。',
   },
   {
@@ -46,6 +50,7 @@ const INITIAL_TODO_EVENTS: EventTodoItem[] = [
     assignee: '李明远',
     handler: '李明远',
     count: 2,
+    respondMinutes: 2.6,
     description: '千兆PoE供电网口以太网物理层错误帧数递增，5分钟内累计丢包185帧，怀疑由于户外接线盒防潮胶垫老化所致。',
   },
   {
@@ -60,6 +65,7 @@ const INITIAL_TODO_EVENTS: EventTodoItem[] = [
     assignee: '张帆',
     handler: '程总工',
     count: 3,
+    respondMinutes: 3.1,
     description: 'Kafka 主题 `rfid-telemetry-events` 消费组在拓扑调整时触发重新平衡，产生 12,400 条临时推迟消费积压。',
   },
   {
@@ -74,6 +80,7 @@ const INITIAL_TODO_EVENTS: EventTodoItem[] = [
     assignee: '王海峰',
     handler: '王海峰',
     count: 4,
+    respondMinutes: 2.2,
     description: '视频流OCR车牌特征提取Restful接口响应时间达到 3,250ms，触发高时延超时降级机制。',
   },
   {
@@ -88,6 +95,7 @@ const INITIAL_TODO_EVENTS: EventTodoItem[] = [
     assignee: '赵振华',
     handler: '赵振华',
     count: 5,
+    respondMinutes: 1.5,
     description: '备库在拉取 Binary Log 时因为 IO 密集型快照备份导致 8 秒延迟，触发心跳报警。',
   },
   {
@@ -102,6 +110,7 @@ const INITIAL_TODO_EVENTS: EventTodoItem[] = [
     assignee: '孙立伟',
     handler: '—',
     count: 1,
+    respondMinutes: 2.9,
     description: '温湿度感知节点报出 85.0°C 离群读数，但周围服务器板载温度传感器均处于 28°C 正常状态，疑似传感器漂移。',
   },
   {
@@ -116,6 +125,7 @@ const INITIAL_TODO_EVENTS: EventTodoItem[] = [
     assignee: '顾亚军',
     handler: '顾亚军',
     count: 2,
+    respondMinutes: 2.4,
     description: '热点主键失效集中导致穿透请求直达后端存储，Redis 缓存命中率由 99.2% 降至 78.4%。',
   },
   {
@@ -130,6 +140,7 @@ const INITIAL_TODO_EVENTS: EventTodoItem[] = [
     assignee: '程总工',
     handler: '—',
     count: 6,
+    respondMinutes: 3.6,
     description: '防火墙并发 TCP 会话达到 1,760,000 条，接近 200 万会话表硬件上限，需清理僵尸 TCP 状态。',
   },
   {
@@ -144,6 +155,7 @@ const INITIAL_TODO_EVENTS: EventTodoItem[] = [
     assignee: '张建国',
     handler: '李明远',
     count: 8,
+    respondMinutes: 1.2,
     description: '固化芯片温度升高至 68.5°C，主板温控机制已启动降频防护，功率由 30dBm 降至 22dBm。',
   },
   {
@@ -158,6 +170,7 @@ const INITIAL_TODO_EVENTS: EventTodoItem[] = [
     assignee: '王海峰',
     handler: '王海峰',
     count: 3,
+    respondMinutes: 2.7,
     description: '容器 `tag-decoder-worker-v2` 内存Limit配置为 2GiB，因未释放图谱缓存触发系统级 OOM 杀进程。',
   },
   {
@@ -172,6 +185,7 @@ const INITIAL_TODO_EVENTS: EventTodoItem[] = [
     assignee: '赵振华',
     handler: '—',
     count: 1,
+    respondMinutes: 2.0,
     description: 'SFP+ 光模块接收光功率下降至 -14.2 dBm，达到预设预警下限 -15.0 dBm。',
   },
   {
@@ -186,6 +200,7 @@ const INITIAL_TODO_EVENTS: EventTodoItem[] = [
     assignee: '张帆',
     handler: '顾亚军',
     count: 7,
+    respondMinutes: 2.8,
     description: '外部客户端轮询查询并发量在 21:00 突增 300%，网关上游连接池满载引发 504 响应。',
   },
 ];
@@ -228,6 +243,9 @@ export const EventTodoView: React.FC = () => {
   });
 
   const totalPages = Math.max(1, Math.ceil(filteredEvents.length / pageSize));
+
+  // 顶部 KPI 由筛选后的待办事件列表实时计算（见 src/data/eventTodo.ts 口径说明）
+  const todoKpis = calcTodoKpis(filteredEvents);
   const currentPageItems = filteredEvents.slice(
     (currentPage - 1) * pageSize,
     currentPage * pageSize
@@ -317,7 +335,7 @@ export const EventTodoView: React.FC = () => {
           <div>
             <span className="text-slate-400 font-sans text-xs block">待办事件总数</span>
             <div className="text-2xl font-black text-slate-100 mt-1">
-              {eventsList.length} <span className="text-xs font-normal text-slate-400">件</span>
+              {todoKpis.total} <span className="text-xs font-normal text-slate-400">件</span>
             </div>
           </div>
           <div className="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400">
@@ -329,7 +347,7 @@ export const EventTodoView: React.FC = () => {
           <div>
             <span className="text-slate-400 font-sans text-xs block">未处理高危事件</span>
             <div className="text-2xl font-black text-rose-400 mt-1">
-              {eventsList.filter((e) => e.status === '未处理' && (e.severity === '重大' || e.severity === '严重')).length} <span className="text-xs font-normal text-slate-400">件</span>
+              {todoKpis.unhandledHighRisk} <span className="text-xs font-normal text-slate-400">件</span>
             </div>
           </div>
           <div className="w-10 h-10 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400">
@@ -341,7 +359,7 @@ export const EventTodoView: React.FC = () => {
           <div>
             <span className="text-slate-400 font-sans text-xs block">处置中工单关联事件</span>
             <div className="text-2xl font-black text-amber-400 mt-1">
-              {eventsList.filter((e) => e.status === '处理中').length} <span className="text-xs font-normal text-slate-400">件</span>
+              {todoKpis.inProgress} <span className="text-xs font-normal text-slate-400">件</span>
             </div>
           </div>
           <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
@@ -353,7 +371,7 @@ export const EventTodoView: React.FC = () => {
           <div>
             <span className="text-slate-400 font-sans text-xs block">平均响应处置时长</span>
             <div className="text-2xl font-black text-emerald-400 mt-1">
-              2.4 <span className="text-xs font-normal text-slate-400">分钟</span>
+              {todoKpis.avgRespondMinutes.toFixed(1)} <span className="text-xs font-normal text-slate-400">分钟</span>
             </div>
           </div>
           <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
@@ -888,6 +906,10 @@ export const EventTodoView: React.FC = () => {
                 <div className="flex justify-between text-slate-300">
                   <span className="text-slate-400 font-sans">发生时间:</span>
                   <span>{viewingEvent.occurTime}</span>
+                </div>
+                <div className="flex justify-between text-slate-300">
+                  <span className="text-slate-400 font-sans">响应处置时长:</span>
+                  <span>{viewingEvent.respondMinutes.toFixed(1)} 分钟</span>
                 </div>
                 <div className="flex justify-between text-slate-300">
                   <span className="text-slate-400 font-sans">所属系统:</span>

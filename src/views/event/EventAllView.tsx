@@ -3,6 +3,7 @@ import {
   Layers, Search, Filter, ShieldCheck, AlertCircle, Eye, 
   UserPlus, ArrowRightLeft, FileText, XCircle, X, Clock, ChevronLeft, ChevronRight, CheckCircle2
 } from 'lucide-react';
+import { calcAllKpis } from '../../data/eventAll';
 
 export interface EventAllItem {
   id: string;              // e.g. EVT-2026-8810211
@@ -229,6 +230,9 @@ export const EventAllView: React.FC = () => {
   });
 
   const totalPages = Math.max(1, Math.ceil(filteredEvents.length / pageSize));
+
+  // 顶部前 3 张 KPI 由筛选后的事件全集列表实时计算（见 src/data/eventAll.ts 口径说明）
+  const allKpis = calcAllKpis(filteredEvents);
   const currentPageItems = filteredEvents.slice(
     (currentPage - 1) * pageSize,
     currentPage * pageSize
@@ -324,7 +328,7 @@ export const EventAllView: React.FC = () => {
           <div>
             <span className="text-slate-400 font-sans text-xs block">事件全集总数</span>
             <div className="text-2xl font-black text-slate-100 mt-1">
-              {eventsList.length} <span className="text-xs font-normal text-slate-400">件</span>
+              {allKpis.total} <span className="text-xs font-normal text-slate-400">件</span>
             </div>
           </div>
           <div className="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400">
@@ -336,7 +340,7 @@ export const EventAllView: React.FC = () => {
           <div>
             <span className="text-slate-400 font-sans text-xs block">待办未结事件</span>
             <div className="text-2xl font-black text-rose-400 mt-1">
-              {eventsList.filter((e) => e.status !== '已完成' && e.status !== '已闭环').length} <span className="text-xs font-normal text-slate-400">件</span>
+              {allKpis.pending} <span className="text-xs font-normal text-slate-400">件</span>
             </div>
           </div>
           <div className="w-10 h-10 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400">
@@ -348,7 +352,7 @@ export const EventAllView: React.FC = () => {
           <div>
             <span className="text-slate-400 font-sans text-xs block">已完成闭环事件</span>
             <div className="text-2xl font-black text-emerald-400 mt-1">
-              {eventsList.filter((e) => e.status === '已完成' || e.status === '已闭环').length} <span className="text-xs font-normal text-slate-400">件</span>
+              {allKpis.closed} <span className="text-xs font-normal text-slate-400">件</span>
             </div>
           </div>
           <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
