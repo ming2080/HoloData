@@ -1,9 +1,15 @@
 import React, { useState } from 'react';
-import { 
-  AlertTriangle, Filter, Search, CheckCircle2, ShieldAlert, 
+import {
+  Filter, Search,
   Check, Bell, Clock, Zap, Info, X, ChevronLeft, ChevronRight, DownloadCloud
 } from 'lucide-react';
 import { AlarmItem } from '../../types';
+import { ActiveAlarmKpiCards } from '../../components/alarm/ActiveAlarmKpiCards';
+import {
+  calcActiveAlarmKpis,
+  matchesAlarmTimeRange,
+  type AlarmTimeRange,
+} from '../../data/activeAlarms';
 
 export interface AlarmInfoItem {
   id: string;
@@ -287,14 +293,28 @@ export const ActiveAlarmsView: React.FC<ActiveAlarmsViewProps> = ({
   // Interactive detail modal state
   const [selectedAlarmDetail, setSelectedAlarmDetail] = useState<AlarmInfoItem | null>(null);
 
+  // 时间范围以列表中最晚一条告警的日期为「今天」（与下拉文案「今天 (2026-11-06)」对应）
+  const latestAlarmDate = INITIAL_ALARM_INFO_LIST.reduce(
+    (max, item) => (item.alarmTime.slice(0, 10) > max ? item.alarmTime.slice(0, 10) : max),
+    ''
+  );
+
   // Filter logic
   const filteredAlarms = INITIAL_ALARM_INFO_LIST.filter((item) => {
     const matchesContent = item.content.toLowerCase().includes(alarmContentSearch.toLowerCase());
     const matchesSource = item.source.toLowerCase().includes(alarmSourceSearch.toLowerCase());
     const matchesStatus = statusFilter === 'all' || item.status === statusFilter;
     const matchesSeverity = severityFilter === 'all' || item.severity === severityFilter;
-    return matchesContent && matchesSource && matchesStatus && matchesSeverity;
+    const matchesTime = matchesAlarmTimeRange(
+      item.alarmTime,
+      timeRangeFilter as AlarmTimeRange,
+      latestAlarmDate
+    );
+    return matchesContent && matchesSource && matchesStatus && matchesSeverity && matchesTime;
   });
+
+  // 顶部 KPI 由筛选后的实时告警列表实时计算（见 src/data/activeAlarms.ts 口径说明）
+  const activeAlarmKpis = calcActiveAlarmKpis(filteredAlarms);
 
   const totalPages = Math.max(1, Math.ceil(filteredAlarms.length / pageSize));
   const currentPageItems = filteredAlarms.slice(
@@ -326,55 +346,7 @@ export const ActiveAlarmsView: React.FC<ActiveAlarmsViewProps> = ({
   return (
     <div className="space-y-6">
       {/* Top Overview KPI summary cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 font-mono">
-        <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800 flex items-center justify-between shadow-xs">
-          <div>
-            <span className="text-slate-400 font-sans text-xs block">告警总记录数</span>
-            <div className="text-2xl font-black text-slate-100 mt-1">
-              {INITIAL_ALARM_INFO_LIST.length} <span className="text-xs font-normal text-slate-400">条</span>
-            </div>
-          </div>
-          <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400">
-            <Bell className="w-5 h-5" />
-          </div>
-        </div>
-
-        <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800 flex items-center justify-between shadow-xs">
-          <div>
-            <span className="text-slate-400 font-sans text-xs block">未确认 / 处置中告警</span>
-            <div className="text-2xl font-black text-rose-400 mt-1">
-              {INITIAL_ALARM_INFO_LIST.filter(a => a.status === '未确认' || a.status === '处置中').length} <span className="text-xs font-normal text-slate-400">条</span>
-            </div>
-          </div>
-          <div className="w-10 h-10 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400">
-            <ShieldAlert className="w-5 h-5 animate-pulse" />
-          </div>
-        </div>
-
-        <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800 flex items-center justify-between shadow-xs">
-          <div>
-            <span className="text-slate-400 font-sans text-xs block">重大与严重告警</span>
-            <div className="text-2xl font-black text-amber-400 mt-1">
-              {INITIAL_ALARM_INFO_LIST.filter(a => a.severity === '重大' || a.severity === '严重').length} <span className="text-xs font-normal text-slate-400">条</span>
-            </div>
-          </div>
-          <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
-            <AlertTriangle className="w-5 h-5" />
-          </div>
-        </div>
-
-        <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800 flex items-center justify-between shadow-xs">
-          <div>
-            <span className="text-slate-400 font-sans text-xs block">自动闭环恢复率</span>
-            <div className="text-2xl font-black text-emerald-400 mt-1">
-              60.0%
-            </div>
-          </div>
-          <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
-            <CheckCircle2 className="w-5 h-5" />
-          </div>
-        </div>
-      </div>
+      <ActiveAlarmKpiCards kpis={activeAlarmKpis} />
 
       {/* Main Section Card: 告警列表 */}
       <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-5 shadow-sm space-y-4">
